@@ -6,9 +6,12 @@ import (
 	"os"
 
 	"github.com/cruffinoni/ftl2gotpl/internal/cli"
+	"github.com/cruffinoni/ftl2gotpl/internal/logging"
 )
 
 func main() {
+	logging.Configure()
+
 	cmd := cli.NewRootCmd()
 	if err := cmd.Execute(); err != nil {
 		var exitErr *cli.ExitError
