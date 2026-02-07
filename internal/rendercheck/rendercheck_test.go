@@ -13,13 +13,15 @@ func TestRenderConvertedTemplate(t *testing.T) {
 	samplePath := filepath.Join(root, "sample.json")
 	require.NoError(t, os.WriteFile(samplePath, []byte(`{"name":"Ada"}`), 0o644))
 
-	status, err := RenderConvertedTemplate("tpl", `Hello {{.name}}`, samplePath)
+	status, htmlOut, err := RenderConvertedTemplate("tpl", `Hello {{.name}}`, samplePath)
 	require.NoError(t, err)
 	require.Equal(t, StatusRendered, status)
+	require.Equal(t, "Hello Ada", htmlOut)
 }
 
 func TestRenderConvertedTemplateMissingSample(t *testing.T) {
-	status, err := RenderConvertedTemplate("tpl", `Hello {{.name}}`, filepath.Join(t.TempDir(), "missing.json"))
+	status, htmlOut, err := RenderConvertedTemplate("tpl", `Hello {{.name}}`, filepath.Join(t.TempDir(), "missing.json"))
 	require.NoError(t, err)
 	require.Equal(t, StatusNoSample, status)
+	require.Empty(t, htmlOut)
 }

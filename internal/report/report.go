@@ -42,6 +42,7 @@ type FileItem struct {
 	HelpersRequired  []string         `json:"helpers_required,omitempty"`
 	RenderChecked    bool             `json:"render_checked"`
 	SamplePath       string           `json:"sample_path,omitempty"`
+	RenderedPath     string           `json:"rendered_path,omitempty"`
 }
 
 // Summary contains aggregate counters for a conversion run.
@@ -143,6 +144,7 @@ func WriteCSV(path string, files []FileItem) error {
 		"features_count",
 		"render_checked",
 		"sample_path",
+		"rendered_path",
 	}
 	if err := w.Write(header); err != nil {
 		return err
@@ -160,6 +162,7 @@ func WriteCSV(path string, files []FileItem) error {
 			intToString(len(item.FeaturesDetected)),
 			boolToString(item.RenderChecked),
 			item.SamplePath,
+			item.RenderedPath,
 		}
 		if err := w.Write(row); err != nil {
 			return err

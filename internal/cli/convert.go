@@ -73,6 +73,7 @@ func runConvert(ctx context.Context, cfg config.Config) error {
 		item := report.FileItem{
 			File: f.RelPath,
 		}
+		var renderedHTML string
 
 		result, err := converter.Convert(f.RelPath, string(raw))
 		if err != nil {
@@ -109,7 +110,7 @@ func runConvert(ctx context.Context, cfg config.Config) error {
 			samplePath := rendercheck.SamplePath(cfg.SamplesRoot, f.RelPath)
 			item.RenderChecked = true
 			item.SamplePath = samplePath
-			status, renderErr := rendercheck.RenderConvertedTemplate(f.RelPath, result.Output, samplePath)
+			status, htmlOutput, renderErr := rendercheck.RenderConvertedTemplate(f.RelPath, result.Output, samplePath)
 			if renderErr != nil {
 				renderFailed++
 				item.Status = report.StatusRenderError
@@ -126,6 +127,8 @@ func runConvert(ctx context.Context, cfg config.Config) error {
 			if status == rendercheck.StatusNoSample {
 				noSample++
 				item.Status = report.StatusConvertedNoData
+			} else {
+				renderedHTML = htmlOutput
 			}
 		}
 		if item.Status == "" {
@@ -138,6 +141,17 @@ func runConvert(ctx context.Context, cfg config.Config) error {
 		}
 		if err := os.WriteFile(outPath, []byte(result.Output), 0o644); err != nil {
 			return fmt.Errorf("write converted template %q: %w", outPath, err)
+		}
+		if renderedHTML != "" {
+			renderedRelPath := fswalk.MirrorOutputPath("", f.RelPath, ".rendered.html")
+			renderedOutPath := filepath.Join(cfg.Out, renderedRelPath)
+			if err := fswalk.EnsureParentDir(renderedOutPath); err != nil {
+				return fmt.Errorf("prepare rendered output path %q: %w", renderedOutPath, err)
+			}
+			if err := os.WriteFile(renderedOutPath, []byte(renderedHTML), 0o644); err != nil {
+				return fmt.Errorf("write rendered template %q: %w", renderedOutPath, err)
+			}
+			item.RenderedPath = renderedRelPath
 		}
 		for _, h := range result.Helpers {
 			helpers[h] = struct{}{}

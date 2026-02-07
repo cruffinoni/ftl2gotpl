@@ -25,29 +25,29 @@ func SamplePath(samplesRoot string, relTemplatePath string) string {
 }
 
 // RenderConvertedTemplate parses and executes converted content.
-func RenderConvertedTemplate(name string, content string, samplePath string) (Status, error) {
+func RenderConvertedTemplate(name string, content string, samplePath string) (Status, string, error) {
 	raw, err := os.ReadFile(samplePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return StatusNoSample, nil
+			return StatusNoSample, "", nil
 		}
-		return StatusNoSample, fmt.Errorf("read sample %q: %w", samplePath, err)
+		return StatusNoSample, "", fmt.Errorf("read sample %q: %w", samplePath, err)
 	}
 
 	var payload map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return StatusNoSample, fmt.Errorf("decode sample JSON %q: %w", samplePath, err)
+		return StatusNoSample, "", fmt.Errorf("decode sample JSON %q: %w", samplePath, err)
 	}
 
 	t, err := template.New(name).Funcs(convert.StubFuncMap()).Parse(content)
 	if err != nil {
-		return StatusNoSample, fmt.Errorf("parse converted template %q before render: %w", name, err)
+		return StatusNoSample, "", fmt.Errorf("parse converted template %q before render: %w", name, err)
 	}
 
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, payload); err != nil {
-		return StatusNoSample, fmt.Errorf("render template %q with sample %q: %w", name, samplePath, err)
+		return StatusNoSample, "", fmt.Errorf("render template %q with sample %q: %w", name, samplePath, err)
 	}
 
-	return StatusRendered, nil
+	return StatusRendered, buf.String(), nil
 }

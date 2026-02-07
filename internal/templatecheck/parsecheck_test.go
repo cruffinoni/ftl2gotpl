@@ -8,5 +8,6 @@ import (
 
 func TestParseConvertedTemplate(t *testing.T) {
 	require.NoError(t, ParseConvertedTemplate("ok", `{{if eq .client_id "mim"}}ok{{end}}`))
+	require.NoError(t, ParseConvertedTemplate("templateName", `{{templateName}}`))
 	require.Error(t, ParseConvertedTemplate("bad", `{{if .a}}`))
 }
