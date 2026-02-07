@@ -57,13 +57,20 @@ func TestStubFuncMapContains(t *testing.T) {
 func TestStubFuncMapSubstringAndIndexOf(t *testing.T) {
 	fm := StubFuncMap()
 	substring := fm["substring"].(func(any, any, ...any) string)
-	indexOf := fm["indexOf"].(func(any, any) int)
+	indexOf := fm["indexOf"].(func(any, any, ...any) int)
 
 	assert.Equal(t, "onj", substring("bonjour", 1, 4))
 	assert.Equal(t, "é", substring("école", 0, 1))
 	assert.Equal(t, "", substring("abc", 3, 1))
 	assert.Equal(t, 1, indexOf("école", "co"))
 	assert.Equal(t, -1, indexOf("abc", "z"))
+	assert.Equal(t, 3, indexOf("ababa", "ba", 2))
+	assert.Equal(t, 0, indexOf("aba", "a", -5))
+	assert.Equal(t, -1, indexOf("abc", "a", 4))
+	assert.Equal(t, 5, indexOf("écoleé", "é", 1))
+	assert.Equal(t, 2, indexOf("abc", "", 2))
+	assert.Equal(t, -1, indexOf("abc", "", 4))
+	assert.Equal(t, 2, indexOf(12345, 34, 1))
 }
 
 func TestStubFuncMapNumberAndDatetime(t *testing.T) {
@@ -87,4 +94,24 @@ func TestStubFuncMapStringTrimAndSafeHTML(t *testing.T) {
 	assert.Equal(t, "hello", trim("  hello  "))
 	assert.Equal(t, "12", toString(12))
 	assert.Equal(t, template.HTML("<b>x</b>"), safeHTML("<b>x</b>"))
+}
+
+func TestStubFuncMapFormatPrice(t *testing.T) {
+	fm := StubFuncMap()
+	formatPrice := fm["formatPrice"].(func(any) string)
+
+	assert.Equal(t, "120 €", formatPrice("120€"))
+	assert.Equal(t, "120 €", formatPrice("120"))
+	assert.Equal(t, "120 €-130 €", formatPrice("120-130"))
+	assert.Equal(t, "120 €", formatPrice("120-120"))
+	assert.Equal(t, "", formatPrice(nil))
+}
+
+func TestStubFuncMapTemplateName(t *testing.T) {
+	fm := StubFuncMap()
+	templateName := fm["templateName"].(func(...any) string)
+
+	assert.Equal(t, "", templateName())
+	assert.Equal(t, "", templateName(nil))
+	assert.Equal(t, "welcome-email", templateName("  welcome-email  "))
 }

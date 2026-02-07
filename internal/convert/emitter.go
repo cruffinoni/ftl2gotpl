@@ -102,6 +102,11 @@ func (e *emitter) emitNode(node ast.Node) error {
 		e.writeComment("ftl setting ignored: " + n.Raw)
 		return nil
 	case ast.FunctionNode:
+		if n.Name == "formatPrice" {
+			e.helpers["formatPrice"] = struct{}{}
+			e.writeComment("ftl function formatPrice ignored: using helper stub")
+			return nil
+		}
 		return diagnostics.New(
 			"EMIT_UNSUPPORTED_FUNCTION",
 			e.file,

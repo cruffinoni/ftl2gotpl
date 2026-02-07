@@ -153,6 +153,16 @@ func mapKeyFrom(v any, keyType reflect.Type) (reflect.Value, bool) {
 // numbers and nil values) and try to stay close to expected FreeMarker behavior
 // for the built-ins currently supported by this converter.
 func StubFuncMap() template.FuncMap {
+	appendEuro := func(raw string) string {
+		part := strings.TrimSpace(raw)
+		part = strings.TrimSuffix(part, "€")
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return ""
+		}
+		return part + " €"
+	}
+
 	return template.FuncMap{
 		"hasContent": func(v any) bool {
 			v = indirect(v)
@@ -213,16 +223,26 @@ func StubFuncMap() template.FuncMap {
 			}
 			return string(runes[start:end])
 		},
-		"indexOf": func(v any, sub any) int {
+		"indexOf": func(v any, sub any, start ...any) int {
 			haystack := []rune(fmt.Sprint(indirect(v)))
 			needle := []rune(fmt.Sprint(indirect(sub)))
+			offset := 0
+			if len(start) > 0 {
+				offset = toInt(start[0])
+			}
+			if offset < 0 {
+				offset = 0
+			}
+			if offset > len(haystack) {
+				return -1
+			}
 			if len(needle) == 0 {
-				return 0
+				return offset
 			}
 			if len(needle) > len(haystack) {
 				return -1
 			}
-			for i := 0; i <= len(haystack)-len(needle); i++ {
+			for i := offset; i <= len(haystack)-len(needle); i++ {
 				if string(haystack[i:i+len(needle)]) == string(needle) {
 					return i
 				}
@@ -266,6 +286,45 @@ func StubFuncMap() template.FuncMap {
 		},
 		"safeHTML": func(v any) template.HTML {
 			return template.HTML(fmt.Sprint(indirect(v)))
+		},
+		"templateName": func(v ...any) string {
+			if len(v) == 0 {
+				return ""
+			}
+			first := indirect(v[0])
+			if isNilLike(first) {
+				return ""
+			}
+			return strings.TrimSpace(fmt.Sprint(first))
+		},
+		"formatPrice": func(v any) string {
+			v = indirect(v)
+			if isNilLike(v) {
+				return ""
+			}
+			raw := strings.TrimSpace(fmt.Sprint(v))
+			if raw == "" {
+				return ""
+			}
+
+			if strings.Contains(raw, "-") {
+				parts := strings.SplitN(raw, "-", 2)
+				firstPrice := appendEuro(parts[0])
+				secondPrice := appendEuro(parts[1])
+				if firstPrice == secondPrice {
+					return firstPrice
+				}
+				if secondPrice == "" {
+					return firstPrice
+				}
+				return firstPrice + "-" + secondPrice
+			}
+
+			base := raw
+			if idx := strings.Index(base, "€"); idx >= 0 {
+				base = base[:idx]
+			}
+			return appendEuro(base)
 		},
 	}
 }
