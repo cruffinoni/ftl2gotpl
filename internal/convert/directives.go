@@ -57,8 +57,10 @@ func (e *emitter) emitListNode(n ast.ListNode) error {
 		return err
 	}
 
-	e.writeAction("range $" + n.ItemVar + " := " + seq)
+	indexVar := n.ItemVar + "_index"
+	e.writeAction("range $" + indexVar + ", $" + n.ItemVar + " := " + seq)
 	e.pushScope()
+	e.declareLocal(indexVar)
 	e.declareLocal(n.ItemVar)
 	if err := e.emitNodes(n.Body); err != nil {
 		e.popScope()
