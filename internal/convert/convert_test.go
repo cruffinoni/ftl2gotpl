@@ -39,7 +39,7 @@ func TestConvertFormatPriceFunctionUsesStubHelper(t *testing.T) {
 	got, err := c.Convert("sample.ftl", input)
 	require.NoError(t, err)
 
-	want := `{{/* ftl function formatPrice ignored: using helper stub */}}{{formatPrice (default "" .ad.price)}}`
+	want := `{{/* ftl function formatPrice ignored: using helper stub */}}{{formatPrice (default "" (safeAccess . "ad" "price"))}}`
 	require.Equal(t, want, got.Output)
-	require.Equal(t, []string{"default", "formatPrice"}, got.Helpers)
+	require.Equal(t, []string{"default", "formatPrice", "safeAccess"}, got.Helpers)
 }

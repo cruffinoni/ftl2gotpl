@@ -11,18 +11,48 @@ func TestMapExprBuiltins(t *testing.T) {
 	m := newExpressionMapper(map[string]struct{}{})
 	got, err := m.mapExpr(`ad.price!''`)
 	require.NoError(t, err)
-	want := `default "" .ad.price`
+	want := `default "" (safeAccess . "ad" "price")`
 	require.Equal(t, want, got)
 
 	helpers := m.helperList()
-	require.True(t, slices.Equal(helpers, []string{"default"}))
+	require.True(t, slices.Equal(helpers, []string{"default", "safeAccess"}))
 }
 
 func TestMapExprFormatPriceCall(t *testing.T) {
 	m := newExpressionMapper(map[string]struct{}{})
 	got, err := m.mapExpr(`formatPrice(ad.price!'')`)
 	require.NoError(t, err)
-	require.Equal(t, `formatPrice (default "" .ad.price)`, got)
+	require.Equal(t, `formatPrice (default "" (safeAccess . "ad" "price"))`, got)
+
+	helpers := m.helperList()
+	require.True(t, slices.Equal(helpers, []string{"default", "formatPrice", "safeAccess"}))
+}
+
+func TestMapExprExistsBuiltinUsesSafeAccess(t *testing.T) {
+	m := newExpressionMapper(map[string]struct{}{})
+	got, err := m.mapExpr(`user.name??`)
+	require.NoError(t, err)
+	require.Equal(t, `exists (safeAccess . "user" "name")`, got)
+
+	helpers := m.helperList()
+	require.True(t, slices.Equal(helpers, []string{"exists", "safeAccess"}))
+}
+
+func TestMapExprExistsBuiltinUsesSafeAccessWithBracketPath(t *testing.T) {
+	m := newExpressionMapper(map[string]struct{}{})
+	got, err := m.mapExpr(`user.metadata["userType"]??`)
+	require.NoError(t, err)
+	require.Equal(t, `exists (safeAccess . "user" "metadata" "userType")`, got)
+
+	helpers := m.helperList()
+	require.True(t, slices.Equal(helpers, []string{"exists", "safeAccess"}))
+}
+
+func TestMapExprDefaultBuiltinNonIdentifierPathUnchanged(t *testing.T) {
+	m := newExpressionMapper(map[string]struct{}{})
+	got, err := m.mapExpr(`formatPrice(ad.price)!''`)
+	require.NoError(t, err)
+	require.Equal(t, `default "" (formatPrice .ad.price)`, got)
 
 	helpers := m.helperList()
 	require.True(t, slices.Equal(helpers, []string{"default", "formatPrice"}))

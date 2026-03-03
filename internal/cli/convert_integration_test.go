@@ -1,14 +1,18 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cruffinoni/ftl2gotpl/internal/config"
+	"github.com/cruffinoni/ftl2gotpl/internal/convert"
 	"github.com/cruffinoni/ftl2gotpl/internal/report"
 	"github.com/stretchr/testify/require"
 )
@@ -161,6 +165,75 @@ func TestRunConvertFormatPriceFunctionStub(t *testing.T) {
 	rendered, err := os.ReadFile(filepath.Join(out, "mail.rendered.html"))
 	require.NoError(t, err)
 	require.Contains(t, string(rendered), "120 €-130 €")
+}
+
+func TestRunConvertRenderCheckStrictHelperFailureReturnsExitCode3(t *testing.T) {
+	root := t.TempDir()
+	in := filepath.Join(root, "in")
+	out := filepath.Join(root, "out")
+	samples := filepath.Join(root, "samples")
+	require.NoError(t, os.MkdirAll(in, 0o755))
+	require.NoError(t, os.MkdirAll(samples, 0o755))
+
+	mustWrite(t, filepath.Join(in, "mail.ftl"), `Value: ${name?substring(3, 1)}`)
+	mustWrite(t, filepath.Join(samples, "mail.ftl.json"), `{"name":"abc"}`)
+
+	cfg := config.Default()
+	cfg.In = in
+	cfg.Out = out
+	cfg.RenderCheck = true
+	cfg.SamplesRoot = samples
+
+	err := runConvert(context.Background(), cfg)
+	require.Error(t, err)
+	var exitErr *ExitError
+	require.True(t, errors.As(err, &exitErr))
+	require.Equal(t, ExitCodeValidationFailed, exitErr.Code)
+	assertNotExists(t, filepath.Join(out, "mail.gotmpl"))
+	assertNotExists(t, filepath.Join(out, "mail.rendered.html"))
+}
+
+func TestRunConvertRenderCheckMissingPathSafeAccess(t *testing.T) {
+	root := t.TempDir()
+	in := filepath.Join(root, "in")
+	out := filepath.Join(root, "out")
+	samples := filepath.Join(root, "samples")
+	require.NoError(t, os.MkdirAll(in, 0o755))
+	require.NoError(t, os.MkdirAll(samples, 0o755))
+
+	mustWrite(t, filepath.Join(in, "mail.ftl"), `exists=${product.color??};fallback=${product.color!"blue"}`)
+	mustWrite(t, filepath.Join(samples, "mail.ftl.json"), `{}`)
+
+	cfg := config.Default()
+	cfg.In = in
+	cfg.Out = out
+	cfg.RenderCheck = true
+	cfg.SamplesRoot = samples
+
+	require.NoError(t, runConvert(context.Background(), cfg))
+	gotmplPath := filepath.Join(out, "mail.gotmpl")
+	renderedPath := filepath.Join(out, "mail.rendered.html")
+	assertExists(t, gotmplPath)
+	assertExists(t, renderedPath)
+
+	converted, err := os.ReadFile(gotmplPath)
+	require.NoError(t, err)
+	require.Contains(t, string(converted), "safeAccess")
+
+	rendered, err := os.ReadFile(renderedPath)
+	require.NoError(t, err)
+	require.Equal(t, "exists=false;fallback=blue", strings.TrimSpace(string(rendered)))
+
+	type typedProduct struct {
+		Name string
+	}
+
+	tpl, err := template.New("mail.gotmpl").Funcs(convert.StubFuncMap()).Parse(string(converted))
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	err = tpl.Execute(&buf, map[string]any{"product": typedProduct{Name: "shirt"}})
+	require.NoError(t, err)
+	require.Equal(t, "exists=false;fallback=blue", strings.TrimSpace(buf.String()))
 }
 
 func TestRunConvertUnsupportedFunctionReturnsExitCode2(t *testing.T) {

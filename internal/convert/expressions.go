@@ -1,3 +1,4 @@
+// Package convert transforms FreeMarker templates into Go templates.
 package convert
 
 import (
@@ -91,6 +92,17 @@ func findMatchingBracket(s string, open int) int {
 		}
 	}
 	return -1
+}
+
+func wrap(expr string) string {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return expr
+	}
+	if strings.ContainsAny(expr, " \t\n") {
+		return "(" + expr + ")"
+	}
+	return expr
 }
 
 // resolveIdentifier maps an identifier path to dot or local variable syntax.
@@ -286,31 +298,6 @@ func parseBuiltinChain(expr string) (string, []builtinCall, bool) {
 	return base, calls, true
 }
 
-func parseFunctionCall(expr string) (string, []string, bool) {
-	expr = strings.TrimSpace(expr)
-	if expr == "" {
-		return "", nil, false
-	}
-
-	name, rest, ok := splitPath(expr)
-	if !ok || strings.TrimSpace(name) == "" {
-		return "", nil, false
-	}
-	if strings.TrimSpace(rest) == "" || rest[0] != '(' {
-		return "", nil, false
-	}
-
-	end := findMatchingParen(rest, 0)
-	if end < 0 || end != len(rest)-1 {
-		return "", nil, false
-	}
-	rawArgs := strings.TrimSpace(rest[1:end])
-	if rawArgs == "" {
-		return name, nil, true
-	}
-	return name, splitArgs(rawArgs), true
-}
-
 func splitArgs(s string) []string {
 	var out []string
 	start := 0
@@ -353,6 +340,31 @@ func splitArgs(s string) []string {
 	}
 	out = append(out, strings.TrimSpace(s[start:]))
 	return out
+}
+
+func parseFunctionCall(expr string) (string, []string, bool) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return "", nil, false
+	}
+
+	name, rest, ok := splitPath(expr)
+	if !ok || strings.TrimSpace(name) == "" {
+		return "", nil, false
+	}
+	if strings.TrimSpace(rest) == "" || rest[0] != '(' {
+		return "", nil, false
+	}
+
+	end := findMatchingParen(rest, 0)
+	if end < 0 || end != len(rest)-1 {
+		return "", nil, false
+	}
+	rawArgs := strings.TrimSpace(rest[1:end])
+	if rawArgs == "" {
+		return name, nil, true
+	}
+	return name, splitArgs(rawArgs), true
 }
 
 func splitTopLevel(expr string, sep string) []string {
@@ -618,23 +630,111 @@ func normalizeStringLiteral(expr string) (string, bool, error) {
 	return expr, false, nil
 }
 
-func wrap(expr string) string {
-	expr = strings.TrimSpace(expr)
-	if expr == "" {
-		return expr
-	}
-	if strings.ContainsAny(expr, " \t\n") {
-		return "(" + expr + ")"
-	}
-	return expr
-}
-
 func joinWrapped(parts []string) string {
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		out = append(out, wrap(p))
 	}
 	return strings.Join(out, " ")
+}
+
+func (m *expressionMapper) mapSafeAccessIdentifierPath(expr string) (string, bool, error) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" || expr == "." {
+		return "", false, nil
+	}
+
+	var root string
+	rest := ""
+	includeFirstSegment := false
+	first := ""
+
+	if strings.HasPrefix(expr, "$") {
+		i := 1
+		for i < len(expr) {
+			ch := expr[i]
+			if unicode.IsLetter(rune(ch)) || unicode.IsDigit(rune(ch)) || ch == '_' {
+				i++
+				continue
+			}
+			break
+		}
+		if i == 1 {
+			return "", false, nil
+		}
+		root = expr[:i]
+		rest = expr[i:]
+	} else {
+		var ok bool
+		first, rest, ok = splitPath(expr)
+		if !ok {
+			return "", false, nil
+		}
+		if _, exists := m.locals[first]; exists {
+			root = "$" + first
+		} else {
+			root = "."
+			includeFirstSegment = true
+		}
+	}
+
+	parts := []string{root}
+	if includeFirstSegment {
+		parts = append(parts, strconv.Quote(first))
+	}
+
+	for i := 0; i < len(rest); {
+		switch rest[i] {
+		case '.':
+			j := i + 1
+			for j < len(rest) {
+				ch := rest[j]
+				if unicode.IsLetter(rune(ch)) || unicode.IsDigit(rune(ch)) || ch == '_' {
+					j++
+					continue
+				}
+				break
+			}
+			if j == i+1 {
+				return "", false, nil
+			}
+			parts = append(parts, strconv.Quote(rest[i+1:j]))
+			i = j
+		case '[':
+			end := findMatchingBracket(rest, i)
+			if end < 0 {
+				return "", false, nil
+			}
+			keyExpr := strings.TrimSpace(rest[i+1 : end])
+			if keyExpr == "" {
+				return "", false, nil
+			}
+			mappedKey, err := m.mapExpr(keyExpr)
+			if err != nil {
+				return "", false, err
+			}
+			parts = append(parts, wrap(mappedKey))
+			i = end + 1
+		default:
+			return "", false, nil
+		}
+	}
+
+	if len(parts) == 1 {
+		return "", false, nil
+	}
+
+	m.helpers["safeAccess"] = struct{}{}
+	return "safeAccess " + strings.Join(parts, " "), true, nil
+}
+
+func (m *expressionMapper) mapMissingOperand(expr string) (string, error) {
+	if mapped, ok, err := m.mapSafeAccessIdentifierPath(expr); err != nil {
+		return "", err
+	} else if ok {
+		return mapped, nil
+	}
+	return m.mapExpr(expr)
 }
 
 // mapExpr converts one FreeMarker expression into its Go template equivalent.
@@ -654,7 +754,7 @@ func (m *expressionMapper) mapExpr(expr string) (string, error) {
 	}
 
 	if lhs, rhs, ok := splitTopLevelDefault(expr); ok {
-		left, err := m.mapExpr(lhs)
+		left, err := m.mapMissingOperand(lhs)
 		if err != nil {
 			return "", err
 		}
@@ -668,7 +768,7 @@ func (m *expressionMapper) mapExpr(expr string) (string, error) {
 
 	if strings.HasSuffix(expr, "??") {
 		base := strings.TrimSpace(strings.TrimSuffix(expr, "??"))
-		mapped, err := m.mapExpr(base)
+		mapped, err := m.mapMissingOperand(base)
 		if err != nil {
 			return "", err
 		}
