@@ -9,6 +9,17 @@ Convert FreeMarker (`.ftl`) templates into Go `html/template` syntax.
   - `?size`, `?has_content`, `?contains`, `?substring`, `?index_of`, `?index`, `?trim`
   - `?number`, `?number_to_datetime`, `?string`
   - `??`, `!default`, `?no_esc`
+- Helper-backed built-ins use strict runtime semantics:
+  - type/shape mismatches and invalid arguments raise template execution errors
+  - there is no permissive fallback coercion for invalid helper inputs
+- Missing-value operators on nested paths use `safeAccess` before helper checks:
+  - `${product.color??}` and `${product.color!"fallback"}` resolve through `safeAccess` so missing intermediate paths stay nil-safe
+  - this avoids early field-evaluation failures before `exists` / `default` logic runs
+- `?has_content` mapping follows FreeMarker-style emptiness checks:
+  - empty means `nil`, zero-length string, or zero-length array/slice/map
+  - whitespace-only strings are non-empty
+  - numbers, booleans, and datetimes are non-empty
+  - unsupported object types are treated as empty
 - Maps bracket access expressions to Go `index`, for example:
   - `user.metadata.attributes["userType"]`
   - `users[user_index]`
@@ -42,11 +53,11 @@ make render-check
 
 Override input/output and strict mode when needed:
 ```bash
-make convert IN=../templates_download OUT=./out-one STRICT=true
+make convert IN=./templates_download OUT=./out-one STRICT=true
 ```
 
 Useful Make variables:
-- `IN` (default: `../templates_download`)
+- `IN` (default: `./templates_download`)
 - `OUT` (default: `./out`)
 - `EXT` (default: `.gotmpl`)
 - `STRICT` (default: `false`)
@@ -56,7 +67,7 @@ Useful Make variables:
 Direct CLI usage (equivalent, with explicit flags):
 ```bash
 go run ./cmd/ftl2gotpl \
-  --in ../templates_download \
+  --in ./templates_download \
   --out ./out \
   --ext .gotmpl \
   --strict=false \

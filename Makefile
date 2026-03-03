@@ -4,20 +4,20 @@ GO ?= go
 BIN_DIR ?= bin
 BIN ?= $(BIN_DIR)/ftl2gotpl
 
-IN ?= ../templates_download
+IN ?= ./templates_download
 OUT ?= ./out
 SAMPLES ?= ./testdata/samples
 ARTIFACTS ?= ./artifacts
 STRICT ?= false
 EXT ?= .gotmpl
 
-.PHONY: help fmt test build run convert render-check clean
+.PHONY: help fmt vet test test-race build run convert render-check clean
 
 help: ## Show available targets and variables
 	@echo "Targets:"
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z0-9_.-]+:.*##/ {printf "  %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
-	@echo "Variables (override like: make convert IN=../templates_download):"
+	@echo "Variables (override like: make convert IN=./templates_download):"
 	@echo "  IN=$(IN)"
 	@echo "  OUT=$(OUT)"
 	@echo "  SAMPLES=$(SAMPLES)"
@@ -28,8 +28,14 @@ help: ## Show available targets and variables
 fmt: ## Format Go source files
 	$(GO) fmt ./...
 
+vet: ## Run static analysis with go vet
+	$(GO) vet ./...
+
 test: ## Run all tests
 	$(GO) test ./...
+
+test-race: ## Run all tests with the race detector
+	$(GO) test -race ./...
 
 build: ## Build binary to $(BIN)
 	mkdir -p $(BIN_DIR)

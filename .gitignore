@@ -33,6 +33,7 @@ go.work.sum
 bin/
 out/
 artifacts/
+templates_download/
 
 # project data (do not publish company-related fixtures/samples)
 testdata/

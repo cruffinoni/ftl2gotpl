@@ -1,3 +1,4 @@
+// Package main provides the ftl2gotpl command entrypoint.
 package main
 
 import (
