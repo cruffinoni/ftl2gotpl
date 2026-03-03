@@ -39,3 +39,37 @@ func TestMirrorOutputPath(t *testing.T) {
 	want := "out/foo/bar/a.gotmpl"
 	require.Equal(t, want, got)
 }
+
+func TestNormalizePattern(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantOut string
+	}{
+		{
+			name:    "blank uses default glob",
+			input:   "",
+			wantOut: "**/*.ftl",
+		},
+		{
+			name:    "whitespace uses default glob",
+			input:   "   \t",
+			wantOut: "**/*.ftl",
+		},
+		{
+			name:    "keeps explicit glob and normalizes separators",
+			input:   `nested\**\*.ftl`,
+			wantOut: "nested/**/*.ftl",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, test.wantOut, normalizePattern(test.input))
+		})
+	}
+}

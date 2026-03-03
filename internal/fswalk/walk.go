@@ -1,3 +1,4 @@
+// Package fswalk discovers input templates and computes output paths.
 package fswalk
 
 import (
@@ -17,13 +18,17 @@ type TemplateFile struct {
 	RelPath string
 }
 
-// normalizePattern returns a usable glob and defaults to **/*.ftl.
+// normalizePattern returns a usable glob and defaults to a recursive .ftl matcher.
 func normalizePattern(pattern string) string {
 	pattern = strings.TrimSpace(pattern)
 	if pattern == "" {
 		return "**/*.ftl"
 	}
-	return filepath.ToSlash(pattern)
+
+	// filepath.ToSlash only rewrites the current platform separator; force
+	// backslashes as well so globs copied from Windows paths behave consistently.
+	normalized := filepath.ToSlash(pattern)
+	return strings.ReplaceAll(normalized, "\\", "/")
 }
 
 // DiscoverTemplates finds files under root matching the glob pattern.
